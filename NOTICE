@@ -1,0 +1,19 @@
+Yotsuba Shader - GDScript frontend includes or uses the following third-party material.
+
+Yotsuba Shader (IR and SPIR-V backend)
+  Location: YotsubaShader/ (Git submodule, https://github.com/KMemphis/YotsubaShader)
+  Copyright: 2026 Memphis Yomael Núñez Cruz - Dominican Republic
+  License: Microsoft Public License (MS-PL)
+  This repository references YotsubaShader.IR and YotsubaShader.Compiler.SpirV from the submodule.
+  It does not modify them.
+
+SPIR-V core grammar
+  File: YotsubaShader/YotsubaShader.Compiler.SpirV/SpirV/spirv.core.grammar.json
+  Copyright: 2014-2024 The Khronos Group Inc.
+  License: MIT
+  The unmodified, normative versions of Khronos specifications and header
+  information are located at https://www.khronos.org/registry/
+
+GDScript is the scripting language of the Godot Engine (https://godotengine.org).
+This project is an independent frontend that reads a GDScript-like syntax. It is not affiliated with,
+endorsed by or part of the Godot Engine or the Godot Foundation, and it contains no Godot source code.

@@ -1,0 +1,4 @@
+[submodule "YotsubaShader"]
+	path = YotsubaShader
+	url = https://github.com/KMemphis/YotsubaShader.git
+	branch = main
