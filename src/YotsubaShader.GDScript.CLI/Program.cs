@@ -1,84 +1,30 @@
-#region MS-PL License - Copyright (c) 2026 Memphis Yomael Núñez Cruz - Dominican Republic
-/*
-╔════════════════════════════════════════════════════════════════════════════════════╗
-║                                                                                    ║
-║  ███╗   ███╗███████╗      ██████╗ ██╗                                              ║
-║  ████╗ ████║██╔════╝      ██╔══██╗██║                                              ║
-║  ██╔████╔██║███████╗█████╗██████╔╝██║                                              ║
-║  ██║╚██╔╝██║╚════██║╚════╝██╔═══╝ ██║                                              ║
-║  ██║ ╚═╝ ██║███████║      ██║     ███████╗                                         ║
-║  ╚═╝     ╚═╝╚══════╝      ╚═╝     ╚══════╝                                         ║
-║                                                                                    ║
-╠════════════════════════════════════════════════════════════════════════════════════╣
-║  Copyright (c) 2026 Memphis Yomael Núñez Cruz - Dominican Republic                 ║
-╠════════════════════════════════════════════════════════════════════════════════════╣
-║                                                                                    ║
-║  Microsoft Public License (MS-PL)                                                  ║
-║                                                                                    ║
-║  This license governs use of the accompanying software. If you use the software,   ║
-║  you accept this license. If you do not accept the license, do not use the         ║
-║  software.                                                                         ║
-║                                                                                    ║
-║  1. Definitions                                                                    ║
-║  The terms "reproduce," "reproduction," "derivative works," and "distribution"     ║
-║  have the same meaning here as under U.S. copyright law.                           ║
-║  A "contribution" is the original software, to which copyright notices are         ║
-║  attached, and any additions or changes to the software.                           ║
-║  A "contributor" is any person that distributes its contribution under this        ║
-║  license.                                                                          ║
-║  "Licensed patents" are a contributor's patent claims that read directly on its    ║
-║  contribution.                                                                     ║
-║                                                                                    ║
-║  2. Grant of Rights                                                                ║
-║  (A) Copyright Grant- Subject to the terms of this license, including the license  ║
-║  conditions and limitations in section 3, each contributor grants you a non-       ║
-║  exclusive, worldwide, royalty-free copyright license to reproduce its             ║
-║  contribution, prepare derivative works of its contribution, and distribute its    ║
-║  contribution or any derivative works that you create.                             ║
-║  (B) Patent Grant- Subject to the terms of this license, including the license     ║
-║  conditions and limitations in section 3, each contributor grants you a non-       ║
-║  exclusive, worldwide, royalty-free license under its licensed patents to make,    ║
-║  have made, use, sell, offer for sale, import, and/or otherwise dispose of its     ║
-║  contribution in the software or derivative works of the contribution in the       ║
-║  software.                                                                         ║
-║                                                                                    ║
-║  3. Conditions and Limitations                                                     ║
-║  (A) No Trademark License- This license does not grant you rights to use any       ║
-║  contributors' name, logo, or trademarks.                                          ║
-║  (B) If you bring a patent claim against any contributor over patents that you     ║
-║  claim are infringed by the software, your patent license from such contributor    ║
-║  to the software ends automatically.                                               ║
-║  (C) If you distribute any portion of the software, you must retain all copyright, ║
-║  patent, trademark, and attribution notices that are present in the software.      ║
-║  (D) If you distribute any portion of the software in source code form, you may do ║
-║  so only under this license by including a complete copy of this license with      ║
-║  your distribution. If you distribute any portion of the software in compiled or   ║
-║  object code form, you may only do so under a license that complies with this      ║
-║  license.                                                                          ║
-║  (E) The software is licensed "as-is." You bear the risk of using it. The          ║
-║  contributors give no express warranties, guarantees or conditions. You may have   ║
-║  additional consumer rights under your local laws which this license cannot        ║
-║  change. To the extent permitted under your local laws, the contributors exclude   ║
-║  the implied warranties of merchantability, fitness for a particular purpose and   ║
-║  non-infringement.                                                                 ║
-║                                                                                    ║
-╚════════════════════════════════════════════════════════════════════════════════════╝
-*/
-#endregion
-
+using YotsubaShader.Godot;
 using YotsubaShader.GDScript;
 using YotsubaShader.GDScript.Diagnostics;
+using YotsubaShader.GDScript.Project;
 
 const string Usage = """
-    yotsuba-gd - compile GDScript shaders to SPIR-V with Yotsuba Shader
+    yotsuba-gd - compile GDScript shaders with Yotsuba Shader
 
-    Usage:
-      yotsuba-gd compile <file.gd | directory> [--output <directory>] [--target spirv] [--emit-spvasm]
+    Commands:
+      compile <file.gd | folder | project.godot> [options]
+          Compile shaders and write the results to a folder.
+      add <project.godot | folder> [--dry-run]
+          Compile every shader of a Godot project and embed the result in each shader's own script, so it can
+          be used from GDScript: MyShader.to_godot_shader_language(), MyShader.to_godot_new_shader(),
+          MyShader.to_godot_shader_material() and MyShader.to_spirv().
 
-    Options:
-      --output, -o   Directory for the generated files (default: ./artifacts).
-      --target, -t   Output target. Only 'spirv' is available in this frontend.
+    Options of compile:
+      --output, -o   Folder for the generated files (default: ./artifacts).
+      --target, -t   spirv (default) or godot (Godot shading language, .gdshader). Repeat to write several.
       --emit-spvasm  Also write the SPIR-V assembly text next to each .spv file.
+
+    Options of add:
+      --dry-run      Report what would change without writing any file.
+
+    A folder or project is searched recursively; only scripts with a shader entry point (# @vertex,
+    # @fragment or # @compute) are compiled, and Godot's own rules apply (.godot, hidden folders and folders with
+    # a .gdignore file or another project.godot are skipped).
     """;
 
 if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
@@ -87,69 +33,186 @@ if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
     return args.Length == 0 ? 1 : 0;
 }
 
-if (args[0] != "compile" || args.Length < 2)
+return args[0] switch
 {
+    "compile" => RunCompile(args),
+    "add" => RunAdd(args),
+    _ => Fail($"Unknown command '{args[0]}'.")
+};
+
+static int Fail(string message)
+{
+    Console.Error.WriteLine(message);
+    Console.Error.WriteLine();
     Console.Error.WriteLine(Usage);
     return 1;
 }
 
-string input = args[1];
-string output = "artifacts";
-bool emitAssembly = false;
-for (int i = 2; i < args.Length; i++)
+static int RunCompile(string[] args)
 {
-    switch (args[i])
+    if (args.Length < 2) return Fail("compile needs a file, a folder or a project.godot.");
+
+    string input = args[1];
+    string output = "artifacts";
+    bool emitAssembly = false;
+    var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    for (int i = 2; i < args.Length; i++)
     {
-        case "--output" or "-o" when i + 1 < args.Length:
-            output = args[++i];
-            break;
-        case "--target" or "-t" when i + 1 < args.Length:
-            string target = args[++i];
-            if (!target.Equals("spirv", StringComparison.OrdinalIgnoreCase))
+        switch (args[i])
+        {
+            case "--output" or "-o" when i + 1 < args.Length:
+                output = args[++i];
+                break;
+            case "--target" or "-t" when i + 1 < args.Length:
+                string target = args[++i];
+                if (!target.Equals("spirv", StringComparison.OrdinalIgnoreCase) &&
+                    !target.Equals("godot", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Fail($"Target '{target}' is not available; use 'spirv' or 'godot'.");
+                }
+
+                targets.Add(target.ToLowerInvariant());
+                break;
+            case "--emit-spvasm":
+                emitAssembly = true;
+                break;
+            default:
+                return Fail($"Unknown or incomplete option '{args[i]}'.");
+        }
+    }
+
+    if (targets.Count == 0) targets.Add("spirv");
+
+    bool explicitFile = File.Exists(input) && Path.GetExtension(input) == ".gd";
+    IEnumerable<string> files;
+    if (explicitFile)
+    {
+        files = [input];
+    }
+    else if (GdProject.Find(input) is { } project && (Directory.Exists(input) || Path.GetFileName(input) == GdProject.ProjectFileName)
+             && SameFolder(project.Root, input))
+    {
+        files = project.EnumerateScripts().Where(IsShader);
+    }
+    else if (Directory.Exists(input))
+    {
+        files = GdProject.EnumerateScripts(input, isRoot: true).Where(IsShader);
+    }
+    else
+    {
+        files = [];
+    }
+
+    if (!files.Any())
+    {
+        Console.Error.WriteLine($"No shader scripts found at '{input}'.");
+        return 1;
+    }
+
+    Directory.CreateDirectory(output);
+    int failures = 0;
+    foreach (string file in files)
+    {
+        try
+        {
+            var compiled = GdShaderCompiler.CompileFile(file);
+            if (targets.Contains("spirv"))
             {
-                Console.Error.WriteLine($"Target '{target}' is not available in the GDScript frontend yet; use 'spirv'.");
-                return 1;
+                string path = Path.Combine(output, compiled.Name + ".spv");
+                File.WriteAllBytes(path, compiled.SpirV);
+                if (emitAssembly) File.WriteAllText(Path.Combine(output, compiled.Name + ".spvasm"), compiled.SpirVAs);
+                Console.WriteLine($"{file} -> {path} ({compiled.SpirV.Length} bytes)");
             }
 
-            break;
-        case "--emit-spvasm":
-            emitAssembly = true;
-            break;
-        default:
-            Console.Error.WriteLine($"Unknown or incomplete option '{args[i]}'.{Environment.NewLine}{Usage}");
-            return 1;
+            if (targets.Contains("godot"))
+            {
+                try
+                {
+                    string path = Path.Combine(output, compiled.Name + ".gdshader");
+                    File.WriteAllText(path, compiled.ToGodotShaderLanguage());
+                    Console.WriteLine($"{file} -> {path}");
+                }
+                catch (GodotBackendException exception)
+                {
+                    failures++;
+                    Console.Error.WriteLine($"{file}: error: cannot write Godot shading language: {exception.Message}");
+                }
+            }
+        }
+        catch (GdCompilationException exception)
+        {
+            failures++;
+            foreach (var diagnostic in exception.Diagnostics) Console.Error.WriteLine(diagnostic.Format(file));
+        }
     }
+
+    return failures == 0 ? 0 : 1;
 }
 
-IEnumerable<string> files = Directory.Exists(input)
-    ? Directory.EnumerateFiles(input, "*.gd", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal)
-    : File.Exists(input)
-        ? [input]
-        : [];
-
-if (!files.Any())
+static bool SameFolder(string root, string input)
 {
-    Console.Error.WriteLine($"No .gd files found at '{input}'.");
-    return 1;
+    string full = Path.GetFullPath(input);
+    if (File.Exists(full)) full = Path.GetDirectoryName(full)!;
+    return string.Equals(Path.TrimEndingDirectorySeparator(full), Path.TrimEndingDirectorySeparator(root),
+        StringComparison.Ordinal);
 }
 
-Directory.CreateDirectory(output);
-int failures = 0;
-foreach (string file in files)
+static bool IsShader(string path) => GdProject.IsShaderScript(File.ReadAllText(path));
+
+static int RunAdd(string[] args)
 {
-    try
-    {
-        var compiled = GdShaderCompiler.CompileFile(file);
-        string path = Path.Combine(output, compiled.Name + ".spv");
-        File.WriteAllBytes(path, compiled.SpirV);
-        if (emitAssembly) File.WriteAllText(Path.Combine(output, compiled.Name + ".spvasm"), compiled.SpirVAs);
-        Console.WriteLine($"{file} -> {path} ({compiled.SpirV.Length} bytes)");
-    }
-    catch (GdCompilationException exception)
-    {
-        failures++;
-        foreach (var diagnostic in exception.Diagnostics) Console.Error.WriteLine(diagnostic.Format(file));
-    }
-}
+    if (args.Length < 2) return Fail("add needs a project.godot (or the folder that contains it).");
 
-return failures == 0 ? 0 : 1;
+    bool dryRun = false;
+    for (int i = 2; i < args.Length; i++)
+    {
+        if (args[i] == "--dry-run") dryRun = true;
+        else return Fail($"Unknown option '{args[i]}'.");
+    }
+
+    var project = GdProject.Find(args[1]);
+    if (project is null || !(Directory.Exists(args[1]) || Path.GetFileName(args[1]) == GdProject.ProjectFileName))
+    {
+        Console.Error.WriteLine($"'{args[1]}' is not a Godot project: no {GdProject.ProjectFileName} found.");
+        return 1;
+    }
+
+    var results = GdProjectAdder.Add(project, dryRun);
+    if (results.Count == 0)
+    {
+        Console.Error.WriteLine($"No shader scripts found in {project.Root}.");
+        return 1;
+    }
+
+    int failures = 0;
+    foreach (var result in results)
+    {
+        if (result.Status == GdAddStatus.Failed)
+        {
+            failures++;
+            foreach (var diagnostic in result.Diagnostics) Console.Error.WriteLine(diagnostic.Format(result.ResourcePath));
+            continue;
+        }
+
+        string verb = result.Status switch
+        {
+            GdAddStatus.Updated => dryRun ? "would update" : "updated",
+            _ => "up to date"
+        };
+        Console.WriteLine($"{result.ResourcePath}: {result.ShaderName} ({verb})");
+        if (result.GodotError is not null)
+        {
+            if (result.GodotErrorIsExpected)
+            {
+                Console.WriteLine($"  note: no Godot shading language: {result.GodotError}");
+            }
+            else
+            {
+                failures++;
+                Console.Error.WriteLine($"{result.ResourcePath}: error: cannot write Godot shading language: {result.GodotError}");
+            }
+        }
+    }
+
+    return failures == 0 ? 0 : 1;
+}

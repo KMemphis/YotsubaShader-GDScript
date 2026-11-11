@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\YotsubaShader.Godot\YotsubaShader.Godot.csproj" />
         <ProjectReference Include="..\..\YotsubaShader\YotsubaShader.IR\YotsubaShader.IR.csproj" />
         <ProjectReference Include="..\..\YotsubaShader\YotsubaShader.Compiler.SpirV\YotsubaShader.Compiler.SpirV.csproj" />
     </ItemGroup>

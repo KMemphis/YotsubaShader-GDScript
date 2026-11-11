@@ -75,4 +75,12 @@ namespace YotsubaShader.GDScript;
 /// <param name="IntermediateLanguage">The Yotsuba IR produced by the frontend.</param>
 /// <param name="SpirV">The SPIR-V binary.</param>
 /// <param name="SpirVAs">The SPIR-V assembly text.</param>
-public sealed record GdCompiledShader(string Name, Shader IntermediateLanguage, byte[] SpirV, string SpirVAs);
+public sealed record GdCompiledShader(string Name, Shader IntermediateLanguage, byte[] SpirV, string SpirVAs)
+{
+    /// <summary>
+    /// The shader as Godot shading language (a <c>spatial</c> shader). Throws
+    /// <see cref="YotsubaShader.Godot.GodotBackendException"/> when the IR cannot be expressed in Godot
+    /// (for example a compute shader).
+    /// </summary>
+    public string ToGodotShaderLanguage() => YotsubaShader.Godot.GodotShaderWriter.Write(IntermediateLanguage, Name);
+}

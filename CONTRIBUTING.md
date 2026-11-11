@@ -32,7 +32,7 @@ dotnet build YotsubaShader.GDScript.sln
 dotnet test tests/YotsubaShader.GDScript.Tests
 ```
 
-The legality tests use the Godot editor binary when they find it (`GODOT_PATH`, or `/Applications/Godot.app`) and are skipped without it. Install Godot 4 to run them.
+The legality tests use the Godot editor binary when they find it (`GODOT_PATH`, or `/Applications/Godot.app`) and are skipped without it. Install Godot 4 to run them. `GodotRenderingTests` compiles the generated shaders with Godot's real renderer and opens a window for a moment, so it only runs with `YOTSUBA_GODOT_RENDER_TESTS=1`.
 
 If you cloned without `--recurse-submodules`, run `git submodule update --init YotsubaShader`. You do not need the
 nested `YotsubaShaderCross` submodule.
@@ -42,10 +42,12 @@ nested `YotsubaShaderCross` submodule.
 | Path | Role |
 | --- | --- |
 | `src/YotsubaShader.GDScript` | The frontend library: lexer, parser, annotation vocabularies, lowering to IR, SPIR-V facade. |
-| `src/YotsubaShader.GDScript.CLI` | The `yotsuba-gd` command-line compiler. |
+| `src/YotsubaShader.Godot` | Backend that writes Godot shading language from the IR. It only reads the IR. |
+| `src/YotsubaShader.GDScript.CLI` | The `yotsuba-gd` command-line compiler (`compile` and `add`). |
 | `tests/YotsubaShader.GDScript.Tests` | Lexer, parser, lowering, vocabulary, diagnostic and end-to-end tests. |
 | `samples/` | Shaders that the test suite compiles. |
 | `docs/LANGUAGE.md` | The supported GDScript subset. |
+| `docs/GODOT.md` | The mapping from the IR to Godot shading language. |
 | `YotsubaShader/` | Submodule with the IR and the SPIR-V backend. Read-only here. |
 
 ## Annotation changes

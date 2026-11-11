@@ -86,7 +86,8 @@ public static class GdShaderCompiler
         string source, string fallbackName = "Shader", string? fileName = null)
     {
         var diagnostics = new GdDiagnosticBag();
-        var file = GdParser.Parse(source, diagnostics);
+        // The block written by `yotsuba-gd add` is generated code, not shader source.
+        var file = GdParser.Parse(Project.GodotGeneratedBlock.Strip(source), diagnostics);
 
         Shader? shader = diagnostics.HasErrors ? null : new GdLowerer(file, diagnostics).Lower();
         if (shader is null || diagnostics.HasErrors)
