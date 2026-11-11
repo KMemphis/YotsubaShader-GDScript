@@ -1,7 +1,7 @@
 <h1 align="center">YotsubaShader · GDScript</h1>
 
 <p align="center">
-  A GDScript frontend for Yotsuba Shader: write shaders in typed GDScript and compile them to SPIR-V through the shared Yotsuba IR.
+  A GDScript frontend for Yotsuba Shader: write shaders in GDScript that Godot itself accepts, and compile them to SPIR-V through the shared Yotsuba IR.
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 [Yotsuba Shader](https://github.com/KMemphis/YotsubaShader) lowers shaders to one backend-neutral intermediate representation (IR) and generates output from it. Its first frontend reads C# through Roslyn. This repository adds a second frontend for teams that write their game logic in **GDScript**: it reads a typed subset of GDScript, builds the **same IR**, and hands it to the **same SPIR-V backend**.
 
 ```text
-GDScript (.gd) with familiar annotations
+GDScript (.gd): valid in Godot, metadata in "# @..." comments
           ↓
 lexing, parsing and semantic analysis
           ↓
@@ -24,6 +24,8 @@ Yotsuba IR            ← shared with the C# frontend
           ↓
 SPIR-V                ← shared backend, nothing GDScript-specific
 ```
+
+**Every shader is a legal GDScript file.** Godot loads it without errors, so you keep Godot's editor, syntax highlighting and CPU-side checks. The shader-specific information (stages, interface slots, bindings) is written as `# @...` comments, which Godot ignores and Yotsuba reads. There are no custom syntax extensions in the language the samples use.
 
 The frontend is written in C# (.NET 8) because the IR is a C# model. It is a library plus a small command-line compiler; it does not run inside the Godot editor and does not replace Godot's own shading language or `ShaderMaterial`.
 
@@ -40,157 +42,181 @@ The annotation style you use does not determine the output target. Native GDScri
 ### Native GDScript annotations
 
 ```gdscript
+# The same idea with GDScript-native annotations: built-ins and locations.
 class_name NativeTriangle
 
 class VertexOutput:
-    @builtin(position) var position: Vector4
-    @location(0) var color: Vector4
+	var position: Vector4 # @builtin(position)
+	var color: Vector4 # @location(0)
 
-@vertex
-func vs(@builtin(vertex_index) vertex_index: uint) -> VertexOutput:
-    var output := VertexOutput.new()
-    var x := 0.0
-    var y := 0.5
-    if vertex_index == 1u:
-        x = 0.5
-        y = -0.5
-    elif vertex_index == 2u:
-        x = -0.5
-        y = -0.5
-    output.position = Vector4(x, y, 0.0, 1.0)
-    output.color = Vector4(1.0, 0.5, 0.25, 1.0)
-    return output
+# @vertex
+func vs(
+		vertex_index: int # @builtin(vertex_index)
+) -> VertexOutput:
+	var output := VertexOutput.new()
+	var x := 0.0
+	var y := 0.5
+	if vertex_index == 1:
+		x = 0.5
+		y = -0.5
+	elif vertex_index == 2:
+		x = -0.5
+		y = -0.5
+	output.position = Vector4(x, y, 0.0, 1.0)
+	output.color = Vector4(1.0, 0.5, 0.25, 1.0)
+	return output
 
-@fragment
-@location(0)
+# @fragment
+# @location(0)
 func fs(input: VertexOutput) -> Vector4:
-    return input.color
+	return input.color
 ```
 
 This small shader shows the essential pieces:
 
-- `class` declares a **struct**; its fields carry the interface annotations.
-- `@vertex`, `@fragment` and `@compute` mark entry points.
-- `@builtin(position)` is the GPU position; `@location(n)` is a numbered interface location.
-- `@location(0)` before a function describes the value it returns (the first render target).
-- `uint` and the `u` literal suffix are Yotsuba extensions; GDScript itself has no unsigned type.
+- `class` declares a **struct**; the comment at the end of each field line carries its interface annotation.
+- `# @vertex`, `# @fragment` and `# @compute` on the lines above a function mark entry points.
+- `# @builtin(position)` is the GPU position; `# @location(n)` is a numbered interface location.
+- `# @location(0)` above a function describes the value it returns (the first render target).
+- A parameter that needs an annotation goes on its own line, with the comment after it.
+- Built-in indices are plain `int` (GDScript has no unsigned type).
 
 ### HLSL-like vocabulary: a familiar color shader
 
 ```gdscript
+# A vertex and a fragment shader that pass a per-vertex color through.
+# Equivalent to BasicColorShader in the C# frontend, written in the HLSL-style vocabulary.
+#
+# This file is valid GDScript: Yotsuba reads its shader metadata from "# @..." comments,
+# which Godot ignores.
 class_name BasicColorShader
 
 class VertexInput:
-    @POSITION var position: Vector2
-    @COLOR var color: Vector4
+	var position: Vector2 # @POSITION
+	var color: Vector4 # @COLOR
 
 class VertexOutput:
-    @SV_Position var position: Vector4
-    @COLOR var color: Vector4
+	var position: Vector4 # @SV_Position
+	var color: Vector4 # @COLOR
 
 class FragmentInput:
-    @COLOR var color: Vector4
+	var color: Vector4 # @COLOR
 
-@vertex
+# @vertex
 func vs(input: VertexInput) -> VertexOutput:
-    var output := VertexOutput.new()
-    output.position = Vector4(input.position.x, input.position.y, 0.0, 1.0)
-    output.color = input.color
-    return output
+	var output := VertexOutput.new()
+	output.position = Vector4(input.position.x, input.position.y, 0.0, 1.0)
+	output.color = input.color
+	return output
 
-@fragment
-@SV_Target(0)
+# @fragment
+# @SV_Target(0)
 func fs(input: FragmentInput) -> Vector4:
-    return input.color
+	return input.color
 
-@compute
-@numthreads(3, 3, 3)
+# @compute
+# @numthreads(3, 3, 3)
 func compute() -> void:
-    pass
+	pass
 ```
 
-This is the GDScript counterpart of `BasicColorShader` in the C# frontend. `[POSITION]` and `[COLOR]` become `@POSITION` and `@COLOR`; the rest of the vocabulary is spelled the same way, with GDScript's `@` in place of C# brackets.
+This is the GDScript counterpart of `BasicColorShader` in the C# frontend. `[POSITION]` and `[COLOR]` become the comments `# @POSITION` and `# @COLOR`; the rest of the vocabulary is spelled the same way, with a comment in place of C# brackets.
 
 ### GLSL-like vocabulary
 
 ```gdscript
+# GLSL-style vocabulary.
 class_name GlslStyle
 
 class VertexOutput:
-    @gl_Position var position: Vector4
+	var position: Vector4 # @gl_Position
 
-@vertex
-func vs(@gl_VertexIndex vertex_index: uint) -> VertexOutput:
-    var output := VertexOutput.new()
-    output.position = Vector4(0.0, 0.0, 0.0, 1.0)
-    return output
+# @vertex
+func vs(
+		vertex_index: int # @gl_VertexIndex
+) -> VertexOutput:
+	var output := VertexOutput.new()
+	output.position = Vector4(0.0, 0.0, 0.0, 1.0)
+	return output
 ```
 
 ### Metal-like vocabulary
 
 ```gdscript
+# Metal-style vocabulary.
 class_name MslStyle
 
 class VertexOutput:
-    @position var position: Vector4
+	var position: Vector4 # @position
 
-@vertex
-func vs(@vertex_id vertex_id: uint) -> VertexOutput:
-    var output := VertexOutput.new()
-    output.position = Vector4(0.0, 0.0, 0.0, 1.0)
-    return output
+# @vertex
+func vs(
+		vertex_id: int # @vertex_id
+) -> VertexOutput:
+	var output := VertexOutput.new()
+	output.position = Vector4(0.0, 0.0, 0.0, 1.0)
+	return output
 ```
 
 ### Vulkan-like vocabulary
 
 ```gdscript
+# Vulkan/SPIR-V-style vocabulary.
 class_name SpirvStyle
 
 class VertexOutput:
-    @BuiltIn_Position var position: Vector4
+	var position: Vector4 # @BuiltIn_Position
 
-@vertex
-func vs(@BuiltIn_VertexIndex vertex_index: uint) -> VertexOutput:
-    var output := VertexOutput.new()
-    output.position = Vector4(0.0, 0.0, 0.0, 1.0)
-    return output
+# @vertex
+func vs(
+		vertex_index: int # @BuiltIn_VertexIndex
+) -> VertexOutput:
+	var output := VertexOutput.new()
+	output.position = Vector4(0.0, 0.0, 0.0, 1.0)
+	return output
 ```
 
 ### WGSL-like vocabulary
 
 ```gdscript
+# WGSL-style vocabulary: the output backend does not depend on the authoring style.
 class_name WgslStyle
 
 class VertexOutput:
-    @builtin_position var position: Vector4
+	var position: Vector4 # @builtin_position
 
-@vertex
-func vs(@builtin_vertex_index index: uint) -> VertexOutput:
-    var output := VertexOutput.new()
-    output.position = Vector4(0.0, 0.0, 0.0, 1.0)
-    return output
+# @vertex
+func vs(
+		index: int # @builtin_vertex_index
+) -> VertexOutput:
+	var output := VertexOutput.new()
+	output.position = Vector4(0.0, 0.0, 0.0, 1.0)
+	return output
 
-@compute
-@workgroup_size(8, 8, 1)
-func main(@builtin_global_invocation_id id: Vector3u) -> void:
-    pass
+# @compute
+# @workgroup_size(8, 8, 1)
+func main(
+		id: Vector3i # @builtin_global_invocation_id
+) -> void:
+	pass
 ```
 
-Every example above is a file in [`samples/`](samples), and the test suite compiles each one. The equivalence table of all spellings is in the [language reference](docs/LANGUAGE.md#annotation-vocabularies).
+Every example above is a file in [`samples/`](samples). The test suite compiles each one and, when Godot is installed, checks that Godot loads it without errors. The equivalence table of all spellings is in the [language reference](docs/LANGUAGE.md#annotation-vocabularies).
 
 ## Resources
 
 Uniform and storage resources are global variables with a resource annotation and a binding:
 
 ```gdscript
-class Material:
-    @semantic("COLOR") var tint: Vector4
-    var exposure: float
+class MaterialData:
+	var tint: Vector4 # @semantic("COLOR")
+	var exposure: float
 
-@group(0) @binding(0) @uniform var material: Material
+# @group(0) @binding(0) @uniform
+var material: MaterialData
 ```
 
-`@register("b", 0)` (HLSL style) sets binding `0` in set `0`. Global `const` values are literals, inlined where they are used.
+`# @register("b", 0)` (HLSL style) sets binding `0` in set `0`. Global `const` values are literals, inlined where they are used.
 
 ## Compiling to SPIR-V
 
@@ -229,7 +255,7 @@ catch (GdCompilationException exception)
 
 ## Current limits
 
-Supported today: `float`, `int`, `uint`, `bool`; `Vector2/3/4`, `Vector2i/3i/4i`, `Vector2u/3u/4u`; structs (`class`); `var` and `const`; assignments and compound assignments; `if`/`elif`/`else`, `while`, `for i in range(...)`, `break`, `continue`; `a if c else b`; helper functions; vector constructors, component reads (`v.x`) and numeric conversions; uniform, storage-buffer and push-constant resources (lowered to IR; see the known issue below about their SPIR-V).
+Supported today: `float`, `int`, `bool`; `Vector2/3/4`, `Vector2i/3i/4i`; structs (`class`); `var` and `const`; assignments and compound assignments; `if`/`elif`/`else`, `while`, `for i in range(...)`, `break`, `continue`; `a if c else b`; helper functions; vector constructors, component reads (`v.x`) and numeric conversions; uniform, storage-buffer and push-constant resources (lowered to IR; see the known issue below about their SPIR-V).
 
 Rejected with a diagnostic because the IR or the backend does not support them yet:
 
@@ -238,6 +264,7 @@ Rejected with a diagnostic because the IR or the backend does not support them y
 - **Matrices, textures, samplers, arrays and indexing.**
 - **Built-ins without an IR equivalent** (barycentrics, subgroups, clip distances, ...).
 - GDScript features with no shader meaning: `match`, signals, `await`, lambdas, `extends`, dynamic typing.
+- Real Godot annotations (`@export`, `@onready`, ...) and annotations written as code: write Yotsuba metadata as `# @...` comments instead.
 
 Known issue of the shared backend: a shader that reads a global resource (uniform, storage buffer or push constant) produces SPIR-V that `spirv-val` rejects, because the backend does not list the resource in the entry point interface (see `samples/resources.gd`). The IR the frontend builds for these resources is correct; the fix belongs in the main repository. Every other sample passes `spirv-val`.
 
@@ -254,6 +281,8 @@ cd YotsubaShader-GDScript
 dotnet build YotsubaShader.GDScript.sln
 dotnet test tests/YotsubaShader.GDScript.Tests
 ```
+
+The legality tests run the Godot editor binary headlessly when they find it (`GODOT_PATH`, or `/Applications/Godot.app`); without Godot they are skipped silently.
 
 `YotsubaShader/` is a Git submodule that points at a commit of the main repository. This repository only consumes its IR and SPIR-V projects; it never modifies them. If you cloned without `--recurse-submodules`, run `git submodule update --init YotsubaShader`; the nested `YotsubaShaderCross` submodule is not needed.
 

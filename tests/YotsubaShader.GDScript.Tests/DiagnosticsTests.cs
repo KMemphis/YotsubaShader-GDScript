@@ -99,15 +99,15 @@ public class DiagnosticsTests
 
     [Fact]
     public void ComputeWithoutWorkgroupSize_IsRejected() =>
-        Assert.Contains(Errors("@compute\nfunc main() -> void:\n    pass\n"), m => m.Contains("needs @workgroup_size"));
+        Assert.Contains(Errors("# @compute\nfunc main() -> void:\n    pass\n"), m => m.Contains("needs @workgroup_size"));
 
     [Fact]
     public void UnknownAnnotation_IsRejected() =>
         Assert.Contains(Errors("""
             class Out:
-                @nonsense var position: Vector4
+                var position: Vector4 # @nonsense
 
-            @vertex
+            # @vertex
             func vs() -> Out:
                 return Out.new()
             """), m => m.Contains("Unknown annotation '@nonsense'"));
@@ -116,9 +116,9 @@ public class DiagnosticsTests
     public void BuiltInsWithoutIrEquivalent_AreRejected() =>
         Assert.Contains(Errors("""
             class Out:
-                @gl_ClipDistance var position: Vector4
+                var position: Vector4 # @gl_ClipDistance
 
-            @vertex
+            # @vertex
             func vs() -> Out:
                 return Out.new()
             """), m => m.Contains("not supported by the IR yet"));
@@ -126,8 +126,10 @@ public class DiagnosticsTests
     [Fact]
     public void BuiltInInTheWrongStage_IsRejected() =>
         Assert.Contains(Errors("""
-            @vertex
-            func vs(@builtin(global_invocation_id) id: Vector3u) -> Vector4:
+            # @vertex
+            func vs(
+                    id: Vector3i # @builtin(global_invocation_id)
+            ) -> Vector4:
                 return Vector4(0.0, 0.0, 0.0, 1.0)
             """), m => m.Contains("can only be used in a compute shader"));
 
@@ -159,9 +161,9 @@ public class DiagnosticsTests
                     return a
 
             class Out:
-                @builtin(position) var position: Vector4
+                var position: Vector4 # @builtin(position)
 
-            @vertex
+            # @vertex
             func vs() -> Out:
                 var o := Out.new()
                 o.position = Vector4(f(1.0), 0.0, 0.0, 1.0)
@@ -175,9 +177,9 @@ public class DiagnosticsTests
                 return f(a)
 
             class Out:
-                @builtin(position) var position: Vector4
+                var position: Vector4 # @builtin(position)
 
-            @vertex
+            # @vertex
             func vs() -> Out:
                 var o := Out.new()
                 o.position = Vector4(f(1.0), 0.0, 0.0, 1.0)
@@ -186,18 +188,18 @@ public class DiagnosticsTests
 
     [Fact]
     public void WritingToAUniform_IsRejected() =>
-        Assert.Contains(Errors(VertexWith("exposure = 2.0", "@group(0) @binding(0) @uniform var exposure: float")),
+        Assert.Contains(Errors(VertexWith("exposure = 2.0", "# @group(0) @binding(0) @uniform\nvar exposure: float")),
             m => m.Contains("read-only"));
 
     [Fact]
     public void ResourceWithoutBinding_IsRejected() =>
-        Assert.Contains(Errors(VertexWith("var a := exposure", "@uniform var exposure: float")),
+        Assert.Contains(Errors(VertexWith("var a := exposure", "# @uniform\nvar exposure: float")),
             m => m.Contains("needs a binding"));
 
     [Fact]
     public void TexturesAndMatrices_AreRejectedWithAReason()
     {
-        Assert.Contains(Errors(VertexWith("pass", "@group(0) @binding(1) @uniform var albedo: Texture2D")),
+        Assert.Contains(Errors(VertexWith("pass", "# @group(0) @binding(1) @uniform\nvar albedo: Texture2D")),
             m => m.Contains("sampling operations"));
         Assert.Contains(Errors(VertexWith("var m: Matrix4x4")), m => m.Contains("matrix values"));
     }

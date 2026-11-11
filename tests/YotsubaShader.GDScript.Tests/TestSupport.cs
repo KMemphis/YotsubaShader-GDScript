@@ -88,9 +88,9 @@ internal static class TestSupport
     public static string VertexWith(string body, string declarations = "") => $"""
         {declarations}
         class Out:
-            @builtin(position) var position: Vector4
+            var position: Vector4 # @builtin(position)
 
-        @vertex
+        # @vertex
         func vs() -> Out:
         {string.Join("\n", body.Split('\n').Select(l => "    " + l))}
             var o := Out.new()

@@ -92,3 +92,23 @@ public readonly record struct GdToken(GdTokenKind Kind, string Text, GdPosition 
 
     public override string ToString() => $"{Kind} '{Text}' at {Position}";
 }
+
+/// <summary>A <c>#</c> comment. <see cref="Trailing"/> is true when code precedes it on the same line.</summary>
+public readonly record struct GdComment(GdPosition Position, string Text, bool Trailing)
+{
+    /// <summary>
+    /// The annotation text when the comment is an annotation comment (<c># @vertex</c>, <c>## @location(0)</c>),
+    /// otherwise null. Annotation comments keep the script valid GDScript: Godot ignores comments.
+    /// </summary>
+    public string? AnnotationText
+    {
+        get
+        {
+            string body = Text.TrimStart('#').TrimStart();
+            return body.Length > 1 && body[0] == '@' && (char.IsLetter(body[1]) || body[1] == '_') ? body : null;
+        }
+    }
+
+    /// <summary>The column where the annotation text starts.</summary>
+    public int AnnotationColumn => Position.Column + (Text.Length - Text.TrimStart('#').TrimStart().Length);
+}

@@ -93,13 +93,24 @@ public sealed class GdLexer
     private int _lineStart;
     private int _depth;
     private char? _indentChar;
+    private bool _lineHasCode;
+    private readonly List<GdComment> _comments = new();
 
-    public GdLexer(string source, GdDiagnosticBag diagnostics)
+    /// <param name="source">The text to tokenize.</param>
+    /// <param name="diagnostics">Receives lexical errors.</param>
+    /// <param name="startLine">Line of the first character (used when lexing the text of a comment).</param>
+    /// <param name="startColumn">Column of the first character.</param>
+    public GdLexer(string source, GdDiagnosticBag diagnostics, int startLine = 1, int startColumn = 1)
     {
         _source = source.Replace("\r\n", "\n").Replace('\r', '\n');
         _diagnostics = diagnostics;
         _indents.Push(0);
+        _line = startLine;
+        _lineStart = -(startColumn - 1);
     }
+
+    /// <summary>Every comment of the source, in order. Valid after <see cref="Tokenize"/>.</summary>
+    public IReadOnlyList<GdComment> Comments => _comments;
 
     public IReadOnlyList<GdToken> Tokenize()
     {
@@ -123,7 +134,9 @@ public sealed class GdLexer
                 _index++;
                 _line++;
                 _lineStart = _index;
-                atLineStart = true;
+                // Inside parentheses a new line continues the expression: it has no indentation of its own.
+                atLineStart = _depth == 0;
+                _lineHasCode = false;
                 continue;
             }
 
@@ -135,7 +148,7 @@ public sealed class GdLexer
 
             if (c == '#')
             {
-                while (_index < _source.Length && _source[_index] != '\n') _index++;
+                ReadComment(trailing: _lineHasCode);
                 continue;
             }
 
@@ -180,9 +193,21 @@ public sealed class GdLexer
         return _tokens;
     }
 
+    private void ReadComment(bool trailing)
+    {
+        var position = Here;
+        int start = _index;
+        while (_index < _source.Length && _source[_index] != '\n') _index++;
+        _comments.Add(new GdComment(position, _source[start.._index], trailing));
+    }
+
     private GdPosition Here => new(_line, _index - _lineStart + 1);
 
-    private void Add(GdTokenKind kind, string text) => _tokens.Add(new GdToken(kind, text, Here));
+    private void Add(GdTokenKind kind, string text)
+    {
+        _tokens.Add(new GdToken(kind, text, Here));
+        if (kind is not (GdTokenKind.Newline or GdTokenKind.Indent or GdTokenKind.Dedent)) _lineHasCode = true;
+    }
 
     /// <summary>Reads leading whitespace. Returns false when the line is blank or comment-only.</summary>
     private bool ReadIndentation()
@@ -206,6 +231,7 @@ public sealed class GdLexer
         char next = _source[_index];
         if (next == '\n' || next == '#')
         {
+            if (next == '#') ReadComment(trailing: false);
             while (_index < _source.Length && _source[_index] != '\n') _index++;
             if (_index < _source.Length)
             {
@@ -246,6 +272,7 @@ public sealed class GdLexer
         int start = _index;
         while (_index < _source.Length && (char.IsLetterOrDigit(_source[_index]) || _source[_index] == '_')) _index++;
         _tokens.Add(new GdToken(GdTokenKind.Identifier, _source[start.._index], position));
+        _lineHasCode = true;
     }
 
     private void ReadNumber()
@@ -297,6 +324,7 @@ public sealed class GdLexer
         }
 
         _tokens.Add(new GdToken(isFloat ? GdTokenKind.Float : GdTokenKind.Integer, text, position));
+        _lineHasCode = true;
     }
 
     private void ReadString(char quote)
@@ -324,6 +352,7 @@ public sealed class GdLexer
         }
 
         _tokens.Add(new GdToken(GdTokenKind.String, text.ToString(), position));
+        _lineHasCode = true;
     }
 
     private void ReadSymbol()
@@ -334,6 +363,7 @@ public sealed class GdLexer
             if (symbol is "(" or "[") _depth++;
             if (symbol is ")" or "]") _depth = Math.Max(0, _depth - 1);
             _tokens.Add(new GdToken(GdTokenKind.Symbol, symbol, Here));
+            _lineHasCode = true;
             _index += symbol.Length;
             return;
         }

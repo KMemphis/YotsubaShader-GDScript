@@ -87,10 +87,12 @@ public class ParserTests
             class_name Demo
 
             class Output:
-                @SV_Position var position: Vector4
+                var position: Vector4 # @SV_Position
 
-            @vertex
-            func vs(@builtin(vertex_index) i: uint) -> Output:
+            # @vertex
+            func vs(
+                    i: uint # @builtin(vertex_index)
+            ) -> Output:
                 var o := Output.new()
                 return o
             """, out var diagnostics);

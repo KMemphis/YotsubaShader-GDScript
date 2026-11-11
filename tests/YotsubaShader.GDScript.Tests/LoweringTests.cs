@@ -192,10 +192,12 @@ public class LoweringTests
     {
         var source = """
             class Out:
-                @builtin(position) var position: Vector4
+                var position: Vector4 # @builtin(position)
 
-            @vertex
-            func vs(@builtin(vertex_index) i: uint) -> Out:
+            # @vertex
+            func vs(
+                    i: uint # @builtin(vertex_index)
+            ) -> Out:
                 var o := Out.new()
                 if i == 1:
                     o.position = Vector4(1.0, 0.0, 0.0, 1.0)
@@ -228,9 +230,9 @@ public class LoweringTests
                 return a
 
             class Out:
-                @builtin(position) var position: Vector4
+                var position: Vector4 # @builtin(position)
 
-            @vertex
+            # @vertex
             func vs() -> Out:
                 var o := Out.new()
                 o.position = Vector4(used(1.0), 0.0, 0.0, 1.0)
@@ -250,7 +252,7 @@ public class LoweringTests
         var resource = Assert.IsType<CustomStruct>(Assert.Single(shader.GlobalResources));
         Assert.Equal(StorageKind.Uniform, resource.Kind);
         Assert.Equal(new DescriptorSlot(0, 0), resource.Slot);
-        Assert.Equal("Material", resource.TypeName);
+        Assert.Equal("MaterialData", resource.TypeName);
     }
 
     [Fact]
@@ -261,7 +263,7 @@ public class LoweringTests
         var compute = shader.Functions.Single(f => f.Stage == Stage.Compute);
         var id = Assert.IsType<Vector>(Assert.Single(compute.Inputs));
         Assert.Equal(new BuiltInSlot(BuiltIn.GlobalInvocationId), id.Slot);
-        Assert.Equal(VectorComponentsType.Uint, id.ComponentsType);
+        Assert.Equal(VectorComponentsType.Int, id.ComponentsType);
         Assert.Equal(new ComputeParams(8, 8, 1), compute.ExtraParams);
     }
 
@@ -270,10 +272,10 @@ public class LoweringTests
     {
         var shader = Lower("""
             class In:
-                @SV_Position var position: Vector4
+                var position: Vector4 # @SV_Position
 
-            @fragment
-            @location(0)
+            # @fragment
+            # @location(0)
             func fs(input: In) -> Vector4:
                 return input.position
             """);

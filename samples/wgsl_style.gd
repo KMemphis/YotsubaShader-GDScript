@@ -2,15 +2,19 @@
 class_name WgslStyle
 
 class VertexOutput:
-    @builtin_position var position: Vector4
+	var position: Vector4 # @builtin_position
 
-@vertex
-func vs(@builtin_vertex_index index: uint) -> VertexOutput:
-    var output := VertexOutput.new()
-    output.position = Vector4(0.0, 0.0, 0.0, 1.0)
-    return output
+# @vertex
+func vs(
+		index: int # @builtin_vertex_index
+) -> VertexOutput:
+	var output := VertexOutput.new()
+	output.position = Vector4(0.0, 0.0, 0.0, 1.0)
+	return output
 
-@compute
-@workgroup_size(8, 8, 1)
-func main(@builtin_global_invocation_id id: Vector3u) -> void:
-    pass
+# @compute
+# @workgroup_size(8, 8, 1)
+func main(
+		id: Vector3i # @builtin_global_invocation_id
+) -> void:
+	pass

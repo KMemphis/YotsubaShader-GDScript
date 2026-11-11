@@ -81,9 +81,9 @@ public class VocabularyTests
     {
         var shader = Lower($$"""
             class Out:
-                {{annotation}} var value: Vector4
+                var value: Vector4 # {{annotation}}
 
-            @vertex
+            # @vertex
             func vs() -> Out:
                 var o := Out.new()
                 o.value = Vector4(0.0, 0.0, 0.0, 1.0)
@@ -95,9 +95,11 @@ public class VocabularyTests
     private static InterfaceSlot? ComputeInputSlot(string annotation)
     {
         var shader = Lower($"""
-            @compute
-            @workgroup_size(1, 1, 1)
-            func main({annotation} id: Vector3u) -> void:
+            # @compute
+            # @workgroup_size(1, 1, 1)
+            func main(
+                    id: Vector3i # {annotation}
+            ) -> void:
                 pass
             """);
         return shader.Functions[0].Inputs[0].Slot;
@@ -147,7 +149,7 @@ public class VocabularyTests
     [InlineData("@layout_local_size(4, 2, 1)")]
     public void WorkgroupSizeSpellings_LowerToComputeParams(string annotation)
     {
-        var shader = Lower($"{annotation}\n@compute\nfunc main() -> void:\n    pass\n");
+        var shader = Lower($"# {annotation}\n# @compute\nfunc main() -> void:\n    pass\n");
 
         Assert.Equal(new ComputeParams(4, 2, 1), shader.Functions[0].ExtraParams);
     }
@@ -159,12 +161,13 @@ public class VocabularyTests
     public void DescriptorAnnotations_LowerToDescriptorSlots(string annotations, int set, int binding)
     {
         var shader = Lower($$"""
-            {{annotations}} @uniform var exposure: float
+            # {{annotations}} @uniform
+            var exposure: float
 
             class Out:
-                @builtin(position) var position: Vector4
+                var position: Vector4 # @builtin(position)
 
-            @vertex
+            # @vertex
             func vs() -> Out:
                 var o := Out.new()
                 o.position = Vector4(exposure, 0.0, 0.0, 1.0)

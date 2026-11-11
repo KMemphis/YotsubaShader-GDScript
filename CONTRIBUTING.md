@@ -11,6 +11,8 @@ does not compile to a new language feature.
   2. your proposal, and
   3. a motivating `.gd` shader.
 
+  Shaders must stay **legal GDScript**: Godot has to load every sample without errors, so new syntax cannot rely on real `@annotations` or on types and literals GDScript does not have. Shader metadata goes in `# @...` comments.
+
   Starting from an issue saves you from writing code that does not fit the design.
 - **IR changes do not belong here.** This frontend only produces the IR defined in
   [YotsubaShader](https://github.com/KMemphis/YotsubaShader). If a construct is not representable in the IR yet, the
@@ -29,6 +31,8 @@ cd YotsubaShader-GDScript
 dotnet build YotsubaShader.GDScript.sln
 dotnet test tests/YotsubaShader.GDScript.Tests
 ```
+
+The legality tests use the Godot editor binary when they find it (`GODOT_PATH`, or `/Applications/Godot.app`) and are skipped without it. Install Godot 4 to run them.
 
 If you cloned without `--recurse-submodules`, run `git submodule update --init YotsubaShader`. You do not need the
 nested `YotsubaShaderCross` submodule.
@@ -53,6 +57,7 @@ do in the C# frontend. When you add or change an annotation:
 - Explain its **semantic equivalence** with the language that inspires it.
 - Make sure equivalent spellings map to the same canonical meaning; `VocabularyTests` checks this.
 - Include **tests**.
+- Annotations are written as comments (`# @name`), never as real GDScript annotations.
 
 ## Pull requests
 

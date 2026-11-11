@@ -79,19 +79,22 @@ public sealed class GdParser
         ["match", "await", "signal", "extends", "enum", "static", "lambda", "yield", "assert", "preload", "load"];
 
     private readonly IReadOnlyList<GdToken> _tokens;
+    private readonly ILookup<int, GdComment> _commentsByLine;
     private readonly GdDiagnosticBag _diagnostics;
     private int _index;
 
-    public GdParser(IReadOnlyList<GdToken> tokens, GdDiagnosticBag diagnostics)
+    public GdParser(IReadOnlyList<GdToken> tokens, IReadOnlyList<GdComment> comments, GdDiagnosticBag diagnostics)
     {
         _tokens = tokens;
+        _commentsByLine = comments.ToLookup(c => c.Position.Line);
         _diagnostics = diagnostics;
     }
 
     public static GdFile Parse(string source, GdDiagnosticBag diagnostics)
     {
-        var tokens = new GdLexer(source, diagnostics).Tokenize();
-        return new GdParser(tokens, diagnostics).ParseFile();
+        var lexer = new GdLexer(source, diagnostics);
+        var tokens = lexer.Tokenize();
+        return new GdParser(tokens, lexer.Comments, diagnostics).ParseFile();
     }
 
     private GdToken Current => _tokens[_index];
@@ -193,8 +196,15 @@ public sealed class GdParser
             return;
         }
 
-        var annotations = ParseAnnotations();
         SkipNewlines();
+        if (Current.Is("@"))
+        {
+            FailRealAnnotation();
+            Recover();
+            return;
+        }
+
+        var annotations = AnnotationsAt(Current.Position.Line);
 
         if (Current.IsKeyword("class"))
         {
@@ -222,29 +232,70 @@ public sealed class GdParser
     }
 
     // ---- Annotations --------------------------------------------------------------------------------------
+    //
+    // Annotations are written as comments, so a script stays valid GDScript (Godot ignores comments):
+    //
+    //     # @vertex                       <- leading: the comment-only lines right above a declaration
+    //     func vs(input: VertexInput) -> VertexOutput:
+    //     var position: Vector4  # @builtin(position)    <- trailing: a comment on the declaration's line
 
-    private List<GdAnnotation> ParseAnnotations()
+    private void FailRealAnnotation() =>
+        Fail("Annotations must be written as comments (for example '# @vertex') so the script stays valid GDScript.");
+
+    /// <summary>The annotations attached to the declaration that starts on <paramref name="line"/>.</summary>
+    private List<GdAnnotation> AnnotationsAt(int line, bool includeTrailing = true)
     {
-        var list = new List<GdAnnotation>();
-        while (Current.Is("@"))
+        var comments = new List<GdComment>();
+
+        // Leading: the contiguous block of comment-only lines directly above.
+        for (int above = line - 1; ; above--)
         {
-            var position = Advance().Position;
-            string name = ExpectIdentifier("an annotation name");
-            var arguments = new List<GdExpr>();
-            if (Accept("("))
+            var onLine = _commentsByLine[above].Where(c => !c.Trailing).ToList();
+            if (onLine.Count == 0) break;
+            comments.InsertRange(0, onLine);
+        }
+
+        if (includeTrailing) comments.AddRange(_commentsByLine[line].Where(c => c.Trailing));
+
+        var annotations = new List<GdAnnotation>();
+        foreach (var comment in comments)
+        {
+            if (comment.AnnotationText is { } text)
             {
-                if (!Current.Is(")"))
+                annotations.AddRange(ParseAnnotationComment(text, comment));
+            }
+        }
+
+        return annotations;
+    }
+
+    private List<GdAnnotation> ParseAnnotationComment(string text, GdComment comment)
+    {
+        var tokens = new GdLexer(text, _diagnostics, comment.Position.Line, comment.AnnotationColumn).Tokenize();
+        var parser = new GdParser(tokens, [], _diagnostics);
+        var list = new List<GdAnnotation>();
+        while (parser.Current.Is("@"))
+        {
+            var position = parser.Advance().Position;
+            string name = parser.ExpectIdentifier("an annotation name");
+            var arguments = new List<GdExpr>();
+            if (parser.Accept("("))
+            {
+                if (!parser.Current.Is(")"))
                 {
-                    do arguments.Add(ParseExpression());
-                    while (Accept(","));
+                    do arguments.Add(parser.ParseExpression());
+                    while (parser.Accept(","));
                 }
 
-                Expect(")");
+                parser.Expect(")");
             }
 
             list.Add(new GdAnnotation(name, arguments, position));
-            // Annotations may sit on their own lines.
-            if (Current.Kind == GdTokenKind.Newline && Peek().Is("@")) _index++;
+        }
+
+        if (parser.Current.Kind is not (GdTokenKind.Newline or GdTokenKind.EndOfFile))
+        {
+            parser.Fail($"Unexpected '{Describe(parser.Current)}' in an annotation comment.");
         }
 
         return list;
@@ -275,8 +326,14 @@ public sealed class GdParser
             {
                 SkipNewlines();
                 if (Current.Kind == GdTokenKind.Dedent || AtEnd) break;
-                var fieldAnnotations = ParseAnnotations();
-                SkipNewlines();
+                if (Current.Is("@"))
+                {
+                    FailRealAnnotation();
+                    Recover();
+                    continue;
+                }
+
+                var fieldAnnotations = Current.IsKeyword("var") ? AnnotationsAt(Current.Position.Line) : [];
                 if (AcceptKeyword("pass")) { EndOfLine(); continue; }
                 if (!Current.IsKeyword("var"))
                 {
@@ -328,6 +385,7 @@ public sealed class GdParser
     private GdFunctionDecl ParseFunction(List<GdAnnotation> annotations)
     {
         var position = Advance().Position; // func
+        int functionLine = position.Line;
         string name = ExpectIdentifier("a function name");
         var parameters = new List<GdParameter>();
         Expect("(");
@@ -335,8 +393,18 @@ public sealed class GdParser
         {
             do
             {
-                var parameterAnnotations = ParseAnnotations();
+                if (Current.Is("@"))
+                {
+                    FailRealAnnotation();
+                    Recover();
+                    break;
+                }
+
                 var parameterPosition = Current.Position;
+                // A trailing comment on the `func` line belongs to the function, not to its first parameter.
+                var parameterAnnotations = parameterPosition.Line == functionLine
+                    ? []
+                    : AnnotationsAt(parameterPosition.Line);
                 string parameterName = ExpectIdentifier("a parameter name");
                 string parameterType = "";
                 if (Accept(":")) parameterType = ExpectIdentifier("a type name");
