@@ -8,7 +8,7 @@ without taking control of the codebase. Agents may also maintain Markdown docume
 
 ## Hard boundaries
 
-- **Never edit `YotsubaShader/`** (the Git submodule with the IR and the SPIR-V backend). It is the main project and has
+- **Never edit `YotsubaShader/`** (the Git submodule with the IR, the SPIR-V backend and the compiler). It is the main project and has
   its own agent policy. Do not run commands that change its working tree, and do not bump the submodule pointer unless
   the developer asks for it.
 - **Never extend the IR from this repository.** If a construct is not representable in the IR yet, the frontend rejects

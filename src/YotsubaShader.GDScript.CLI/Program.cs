@@ -16,7 +16,10 @@ const string Usage = """
 
     Options of compile:
       --output, -o   Folder for the generated files (default: ./artifacts).
-      --target, -t   spirv (default) or godot (Godot shading language, .gdshader). Repeat to write several.
+      --target, -t   spirv (default), godot (Godot shading language, .gdshader), hlsl, glsl, gles
+                     (GLSL ES), msl or cpp. Repeat to write several. hlsl, glsl, gles, msl and cpp
+                     write one file per stage (<Name>.<Stage>.<ext>), from the SPIR-V through
+                     YotsubaShaderCross, the same emission the C# frontend uses.
       --emit-spvasm  Also write the SPIR-V assembly text next to each .spv file.
 
     Options of add:
@@ -65,10 +68,9 @@ static int RunCompile(string[] args)
                 break;
             case "--target" or "-t" when i + 1 < args.Length:
                 string target = args[++i];
-                if (!target.Equals("spirv", StringComparison.OrdinalIgnoreCase) &&
-                    !target.Equals("godot", StringComparison.OrdinalIgnoreCase))
+                if (!Targets.Known.Contains(target))
                 {
-                    return Fail($"Target '{target}' is not available; use 'spirv' or 'godot'.");
+                    return Fail($"Target '{target}' is not available; use one of: {string.Join(", ", Targets.Known)}.");
                 }
 
                 targets.Add(target.ToLowerInvariant());
@@ -124,6 +126,32 @@ static int RunCompile(string[] args)
                 Console.WriteLine($"{file} -> {path} ({compiled.SpirV.Length} bytes)");
             }
 
+            foreach (string target in Targets.Stage.Where(targets.Contains))
+            {
+                foreach (var stage in compiled.Stages)
+                {
+                    string path = Path.Combine(output, $"{compiled.Name}.{stage}{StageExtension(target)}");
+                    try
+                    {
+                        string text = target switch
+                        {
+                            "hlsl" => compiled.ToHlsl(stage),
+                            "glsl" => compiled.ToGlsl(stage),
+                            "gles" => compiled.ToGlslEs(stage),
+                            "msl" => compiled.ToMsl(stage),
+                            _ => compiled.ToCpp(stage),
+                        };
+                        File.WriteAllText(path, text);
+                        Console.WriteLine($"{file} -> {path}");
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+                    {
+                        failures++;
+                        Console.Error.WriteLine($"{file}: error: cannot write {target} for the {stage} stage: {exception.Message}");
+                    }
+                }
+            }
+
             if (targets.Contains("godot"))
             {
                 try
@@ -148,6 +176,15 @@ static int RunCompile(string[] args)
 
     return failures == 0 ? 0 : 1;
 }
+
+static string StageExtension(string target) => target switch
+{
+    "hlsl" => ".hlsl",
+    "glsl" => ".glsl",
+    "gles" => ".gles",
+    "msl" => ".msl",
+    _ => ".cpp",
+};
 
 static bool SameFolder(string root, string input)
 {
@@ -215,4 +252,12 @@ static int RunAdd(string[] args)
     }
 
     return failures == 0 ? 0 : 1;
+}
+
+internal static class Targets
+{
+    /// <summary>Targets written per stage, from the SPIR-V through YotsubaShaderCross.</summary>
+    public static readonly string[] Stage = ["hlsl", "glsl", "gles", "msl", "cpp"];
+
+    public static readonly string[] Known = ["spirv", "godot", .. Stage];
 }

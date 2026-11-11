@@ -1,7 +1,7 @@
 <h1 align="center">YotsubaShader · GDScript</h1>
 
 <p align="center">
-  A GDScript frontend for Yotsuba Shader: write shaders in GDScript that Godot itself accepts, and compile them to SPIR-V through the shared Yotsuba IR.
+  A GDScript frontend for Yotsuba Shader: write shaders in GDScript that Godot itself accepts, and compile them through the shared Yotsuba IR to SPIR-V, HLSL, GLSL, GLSL ES, Metal, C++ and Godot shading language.
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
 
 ## The product
 
-[Yotsuba Shader](https://github.com/KMemphis/YotsubaShader) lowers shaders to one backend-neutral intermediate representation (IR) and generates output from it. Its first frontend reads C# through Roslyn. This repository adds a second frontend for teams that write their game logic in **GDScript**: it reads a typed subset of GDScript, builds the **same IR**, and hands it to the **same SPIR-V backend**.
+[Yotsuba Shader](https://github.com/KMemphis/YotsubaShader) lowers shaders to one backend-neutral intermediate representation (IR) and generates output from it. Its first frontend reads C# through Roslyn. This repository adds a second frontend for teams that write their game logic in **GDScript**: it reads a typed subset of GDScript, builds the **same IR**, and hands it to the **same backends**: SPIR-V, and from the SPIR-V the HLSL, GLSL, GLSL ES, Metal and C++ emitters of Yotsuba Shader. A further backend of this repository writes Godot shading language.
 
 ```text
 GDScript (.gd): valid in Godot, metadata in "# @..." comments
@@ -24,7 +24,9 @@ Yotsuba IR            ← shared with the C# frontend
           ↓
 SPIR-V                ← shared backend, nothing GDScript-specific
           ↓
-Godot shading language ← optional backend of this repository, for ShaderMaterial
+HLSL · GLSL · GLSL ES · MSL · C++   ← shared emitters (YotsubaShaderCross), from the SPIR-V
+
+Yotsuba IR  →  Godot shading language   ← backend of this repository, for ShaderMaterial
 ```
 
 **Every shader is a legal GDScript file.** Godot loads it without errors, so you keep Godot's editor, syntax highlighting and CPU-side checks. The shader-specific information (stages, interface slots, bindings) is written as `# @...` comments, which Godot ignores and Yotsuba reads. There are no custom syntax extensions in the language the samples use.
@@ -35,7 +37,7 @@ The frontend is written in C# (.NET 8) because the IR is a C# model. It is a lib
 
 ## Status
 
-The frontend compiles vertex, fragment and compute entry points with scalar, vector and struct values, helper functions and structured control flow to SPIR-V that passes `spirv-val`, and lowers uniform, storage-buffer and push-constant resources to the IR. A second backend writes **Godot shading language** (`spatial` shaders) from the IR, so the same script becomes a `ShaderMaterial`. It supports **exactly what the IR and the SPIR-V backend support today**: constructs the IR cannot represent yet are rejected with a clear diagnostic. This repository never extends the IR; when the C# frontend gains a feature in the main repository, this frontend follows. See [Current limits](#current-limits).
+The frontend compiles vertex, fragment and compute entry points with scalar, vector and struct values, helper functions and structured control flow to SPIR-V that passes `spirv-val`, and lowers uniform, storage-buffer and push-constant resources to the IR. From the SPIR-V it also writes **HLSL, GLSL, GLSL ES, Metal and C++** through YotsubaShaderCross, one file per stage, exactly as the C# frontend does. A second backend writes **Godot shading language** (`spatial` shaders) from the IR, so the same script becomes a `ShaderMaterial`. It supports **exactly what the IR and the SPIR-V backend support today**: constructs the IR cannot represent yet are rejected with a clear diagnostic. This repository never extends the IR; when the C# frontend gains a feature in the main repository, this frontend follows. See [Current limits](#current-limits).
 
 ## One shader, six annotation vocabularies
 
@@ -229,7 +231,7 @@ The command-line compiler `yotsuba-gd` has the same two commands as the C# front
 ```bash
 dotnet run --project src/YotsubaShader.GDScript.CLI -- \
   compile samples/basic_color.gd \
-  --target spirv --target godot \
+  --target spirv --target hlsl --target godot \
   --output artifacts/
 ```
 
@@ -238,7 +240,7 @@ dotnet run --project src/YotsubaShader.GDScript.CLI -- \
 | Option | Effect |
 | --- | --- |
 | `--output`, `-o` | Folder for the generated files (default `./artifacts`). |
-| `--target`, `-t` | `spirv` (default) writes `<Name>.spv`; `godot` writes `<Name>.gdshader`. Repeat it to write both. |
+| `--target`, `-t` | Repeat it to write several. `spirv` (default) writes `<Name>.spv`; `godot` writes `<Name>.gdshader`; `hlsl`, `glsl`, `gles` (GLSL ES), `msl` and `cpp` write one file per stage, `<Name>.<Stage>.<ext>` (`.hlsl`, `.glsl`, `.gles`, `.msl`, `.cpp`), from the SPIR-V. A stage with more than one entry point is reported as an error for that stage. |
 | `--emit-spvasm` | Also writes the SPIR-V assembly text. |
 
 Diagnostics use the `file(line,column): error: message` format. The exit code is `1` when any script fails.
@@ -291,6 +293,7 @@ The mapping from the IR to Godot (built-ins, varyings, uniforms and limits) is d
 ```csharp
 using YotsubaShader.GDScript;
 using YotsubaShader.GDScript.Diagnostics;
+using YotsubaShader.IR.Intermediate;
 
 try
 {
@@ -299,6 +302,7 @@ try
     File.WriteAllBytes($"{shader.Name}.spv", shader.SpirV);
     File.WriteAllText($"{shader.Name}.gdshader", shader.ToGodotShaderLanguage());
     Console.WriteLine(shader.SpirVAs);                              // SPIR-V assembly text
+    File.WriteAllText($"{shader.Name}.hlsl", shader.ToHlsl(Stage.Fragment)); // ToGlsl, ToGlslEs, ToMsl and ToCpp too
     Console.WriteLine(shader.IntermediateLanguage.Functions.Count); // the Yotsuba IR
 }
 catch (GdCompilationException exception)
@@ -341,7 +345,7 @@ dotnet test tests/YotsubaShader.GDScript.Tests
 
 The legality tests run the Godot editor binary headlessly when they find it (`GODOT_PATH`, or `/Applications/Godot.app`); without Godot they are skipped silently. One more test compiles every generated Godot shader with Godot's real renderer and calls the methods that `add` embeds; it opens a Godot window for a moment, so it only runs with `YOTSUBA_GODOT_RENDER_TESTS=1`.
 
-`YotsubaShader/` is a Git submodule that points at a commit of the main repository. This repository only consumes its IR and SPIR-V projects; it never modifies them. If you cloned without `--recurse-submodules`, run `git submodule update --init YotsubaShader`; the nested `YotsubaShaderCross` submodule is not needed.
+`YotsubaShader/` is a Git submodule that points at a commit of the main repository. This repository only consumes its IR, SPIR-V and compiler projects; it never modifies them. The main repository has its own submodule, `YotsubaShaderCross` (the SPIR-V to HLSL / GLSL / Metal / C++ emitters), which the `hlsl`, `glsl`, `gles`, `msl` and `cpp` targets need, so clone recursively. If you cloned without `--recurse-submodules`, run `git submodule update --init --recursive`.
 
 ## Repository architecture
 
@@ -354,7 +358,7 @@ The legality tests run the Godot editor binary headlessly when they find it (`GO
 | `samples/` | Example shaders in every vocabulary, compiled by the tests. |
 | `docs/LANGUAGE.md` | Reference for the supported GDScript subset. |
 | `docs/GODOT.md` | How the IR maps to Godot shading language, and the limits of that mapping. |
-| `YotsubaShader/` | Submodule: `YotsubaShader.IR` and `YotsubaShader.Compiler.SpirV` from the main repository. |
+| `YotsubaShader/` | Submodule: `YotsubaShader.IR`, `YotsubaShader.Compiler.SpirV` and `YotsubaShader.Compiler` (with its nested `YotsubaShaderCross`) from the main repository. |
 
 Inside `src/YotsubaShader.GDScript`: `Project/` finds the Godot project and its shader scripts and writes the generated block of `add`; `Lexing/` and `Parsing/` produce the syntax tree in `Syntax/`; `Annotations/` holds the single vocabulary table and one file per dialect; `Semantics/` defines the type system; `Lowering/` turns the tree into IR (`GdLowerer` for the module and interface slots, `GdFunctionLowerer` for function bodies).
 

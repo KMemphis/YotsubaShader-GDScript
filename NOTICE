@@ -4,8 +4,15 @@ Yotsuba Shader (IR and SPIR-V backend)
   Location: YotsubaShader/ (Git submodule, https://github.com/KMemphis/YotsubaShader)
   Copyright: 2026 Memphis Yomael Núñez Cruz - Dominican Republic
   License: Microsoft Public License (MS-PL)
-  This repository references YotsubaShader.IR and YotsubaShader.Compiler.SpirV from the submodule.
-  It does not modify them.
+  This repository references YotsubaShader.IR, YotsubaShader.Compiler.SpirV and YotsubaShader.Compiler from the
+  submodule. It does not modify them.
+
+YotsubaShaderCross (nested submodule of Yotsuba Shader)
+  Location: YotsubaShader/YotsubaShaderCross/ (https://github.com/KMemphis/YotsubaShaderCross)
+  Copyright: 2026 Memphis Yomael Núñez Cruz - Dominican Republic; the translated code remains under
+  SPIRV-Cross' copyright (Apache-2.0 OR MIT, used under the MIT License).
+  Provides the SPIR-V to HLSL, GLSL, GLSL ES, Metal and C++ emission. Its own THIRD-PARTY-NOTICES.md lists
+  the notices that travel with the translated code.
 
 SPIR-V core grammar
   File: YotsubaShader/YotsubaShader.Compiler.SpirV/SpirV/spirv.core.grammar.json

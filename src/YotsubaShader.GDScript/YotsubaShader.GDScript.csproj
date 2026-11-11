@@ -11,6 +11,8 @@
         <ProjectReference Include="..\YotsubaShader.Godot\YotsubaShader.Godot.csproj" />
         <ProjectReference Include="..\..\YotsubaShader\YotsubaShader.IR\YotsubaShader.IR.csproj" />
         <ProjectReference Include="..\..\YotsubaShader\YotsubaShader.Compiler.SpirV\YotsubaShader.Compiler.SpirV.csproj" />
+        <!-- CompiledCode: the same HLSL / GLSL / GLSL ES / MSL / C++ emission (YotsubaShaderCross) the C# frontend uses. -->
+        <ProjectReference Include="..\..\YotsubaShader\YotsubaShader.Compiler\YotsubaShader.Compiler.csproj" />
     </ItemGroup>
 
 </Project>

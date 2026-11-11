@@ -66,6 +66,7 @@
 */
 #endregion
 
+using YotsubaShader.Compiler;
 using YotsubaShader.IR.Intermediate;
 
 namespace YotsubaShader.GDScript;
@@ -83,4 +84,34 @@ public sealed record GdCompiledShader(string Name, Shader IntermediateLanguage, 
     /// (for example a compute shader).
     /// </summary>
     public string ToGodotShaderLanguage() => YotsubaShader.Godot.GodotShaderWriter.Write(IntermediateLanguage, Name);
+
+    /// <summary>
+    /// The stages this shader has entry points for (Vertex, Fragment, Compute), in declaration order.
+    /// </summary>
+    public IReadOnlyList<Stage> Stages => IntermediateLanguage.Functions
+        .Select(function => function.Stage)
+        .Where(stage => stage != Stage.None)
+        .Distinct()
+        .ToList();
+
+    // The main repository's own emission path: SPIR-V in, source text out (YotsubaShaderCross). The same
+    // CompiledCode the C# frontend returns, built from this frontend's IR and SPIR-V, so every method below
+    // behaves exactly as it does there. Each takes one stage and needs exactly one entry point for it.
+    private CompiledCode ToCompiledCode() =>
+        new(new ShaderReflection(IntermediateLanguage), SpirV, SpirVAs, Name);
+
+    /// <summary>The stage as HLSL source (shader model 5).</summary>
+    public string ToHlsl(Stage stage) => ToCompiledCode().ToHlsl(stage);
+
+    /// <summary>The stage as desktop GLSL source.</summary>
+    public string ToGlsl(Stage stage, uint version = 450) => ToCompiledCode().ToGlsl(stage, version);
+
+    /// <summary>The stage as GLSL ES source.</summary>
+    public string ToGlslEs(Stage stage, uint version = 310) => ToCompiledCode().ToGlslEs(stage, version);
+
+    /// <summary>The stage as Metal Shading Language source.</summary>
+    public string ToMsl(Stage stage) => ToCompiledCode().ToMsl(stage);
+
+    /// <summary>The stage as C++ source.</summary>
+    public string ToCpp(Stage stage) => ToCompiledCode().ToCpp(stage);
 }
